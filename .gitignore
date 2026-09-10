@@ -1,0 +1,23 @@
+node_modules/
+.DS_Store
+*.log
+scripts/password-fixture/server
+scripts/password-fixture/.build/
+
+# Generated artifacts and local configuration
+*.app/
+*.xcarchive/
+*.dSYM/
+*.log
+__pycache__/
+.env
+.env.*
+!.env.example
+
+/distribution/
+/verification/
+/benchmark-results.json
+/preview.png
+/src/keychain-helper
+/src/drag-bridge.node
+/scripts/mouse-drag

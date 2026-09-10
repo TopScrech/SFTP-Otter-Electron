@@ -1,0 +1,17 @@
+const {test}=require('node:test')
+const assert=require('node:assert/strict')
+const fs=require('node:fs/promises')
+const os=require('node:os')
+const path=require('node:path')
+const net=require('node:net')
+const crypto=require('node:crypto')
+const {spawn,execFile}=require('node:child_process')
+const {promisify}=require('node:util')
+const {scanHost,openTransport}=require('../src/transport.cjs')
+const exec=promisify(execFile)
+async function fixture(t,rsa=false){const dir=await fs.mkdtemp(path.join(os.tmpdir(),'tide-ssh-test-'));let server;const clients=[];t.after(async()=>{clients.forEach(c=>c.end());server?.kill();await fs.rm(dir,{recursive:true,force:true})});const listener=net.createServer();await new Promise(r=>listener.listen(0,'127.0.0.1',r));const port=listener.address().port;await new Promise(r=>listener.close(r));await exec('ssh-keygen',['-q','-t',rsa?'rsa':'ed25519','-N','','-f',path.join(dir,'host')]);await exec('ssh-keygen',['-q','-t','ed25519','-N','test-passphrase','-f',path.join(dir,'key')]);const subsystem=process.platform==='darwin'?'/usr/libexec/sftp-server':'/usr/lib/openssh/sftp-server';await fs.writeFile(path.join(dir,'config'),`Port ${port}\nListenAddress 127.0.0.1\nHostKey ${dir}/host\nPidFile ${dir}/pid\nAuthorizedKeysFile ${dir}/key.pub\nStrictModes no\nPasswordAuthentication no\nUsePAM no\nSubsystem sftp ${subsystem}\n${rsa?'KexAlgorithms ecdh-sha2-nistp256\nCiphers aes256-ctr\nMACs hmac-sha2-256\nHostKeyAlgorithms rsa-sha2-512,rsa-sha2-256\n':''}`);server=spawn('/usr/sbin/sshd',['-D','-e','-f',path.join(dir,'config')]);let stderr='';server.stderr.on('data',b=>stderr+=b);await new Promise(r=>setTimeout(r,150));if(server.exitCode!==null)throw new Error(stderr);const host={host:'127.0.0.1',port,username:os.userInfo().username,auth:'key',privateKeyPath:path.join(dir,'key')};return {dir,host,clients,keys:await scanHost(host)}}
+test('Real SSH authentication uses encrypted keys via Electron askpass',async t=>{const {dir,host,keys,clients}=await fixture(t);const client=await openTransport(host,keys[0],{passphrase:'test-passphrase',executable:require('electron')});clients.push(client);assert.equal(await client.realpath(dir),await fs.realpath(dir));const data=crypto.randomBytes(65539);const file=path.join(dir,'transport.bin');const handle=await client.open(file,2|8|32);await client.write(handle,0,data.subarray(0,32768));await client.write(handle,32768,data.subarray(32768));await client.closeHandle(handle);assert.deepEqual(await fs.readFile(file),data)})
+test('A mismatched host key is blocked by OpenSSH',async t=>{const {host,keys}=await fixture(t);const {stdout}=await exec('ssh-keygen',['-q','-y','-P','test-passphrase','-f',host.privateKeyPath]);const key=stdout.trim().split(/\s+/)[1];await assert.rejects(openTransport(host,{...keys[0],key},{passphrase:'test-passphrase'}),/HOST IDENTIFICATION HAS CHANGED|Host key verification failed/)})
+test('Wrong key passphrase fails without hanging or prompting a terminal',async t=>{const {host,keys}=await fixture(t);await assert.rejects(openTransport(host,keys[0],{passphrase:'wrong',executable:require('electron')}),/Permission denied/)})
+
+test('RSA SHA2 host keys negotiate ECDH, AES-CTR and HMAC-SHA2 successfully',async t=>{const {dir,host,keys,clients}=await fixture(t,true);assert.equal(keys[0].algorithm,'ssh-rsa');const client=await openTransport(host,keys[0],{passphrase:'test-passphrase',executable:require('electron')});clients.push(client);assert.equal(await client.realpath(dir),await fs.realpath(dir))})

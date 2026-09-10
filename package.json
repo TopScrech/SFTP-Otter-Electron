@@ -1,0 +1,23 @@
+{
+  "name": "sftp-otter",
+  "version": "1.0.0",
+  "description": "SFTP Otter, a fast macOS SFTP client built with Electron",
+  "main": "src/main.cjs",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test test/*.test.cjs",
+    "check": "node --check src/main.cjs && node --check src/engine.cjs && node --check src/preload.cjs && node --check src/renderer.js",
+    "smoke": "electron . --smoke-test",
+    "benchmark": "node scripts/benchmark.cjs",
+    "package:mac": "npm run build:native && node scripts/package-mac.cjs",
+    "build:native": "node scripts/build-native.cjs",
+    "verify:relaunch": "node scripts/verify-relaunch.cjs",
+    "verify:native": "electron . --smoke-test --native-ui-test",
+    "verify:trust": "node scripts/verify-trust.cjs"
+  },
+  "devDependencies": {
+    "electron": "44.2.0"
+  },
+  "productName": "SFTP Otter"
+}
