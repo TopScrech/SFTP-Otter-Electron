@@ -17,7 +17,7 @@
     "verify:trust": "node scripts/verify-trust.cjs"
   },
   "devDependencies": {
-    "electron": "44.2.0"
+    "electron": "44.4.1"
   },
   "productName": "SFTP Otter"
 }
